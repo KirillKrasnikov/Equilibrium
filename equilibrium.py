@@ -5,7 +5,9 @@
     EquilibriumOnPlane - класс для решения конфликтных хадач двух лиц на плоскости.
 
 """
-import numpy
+from operator import index
+
+# import numpy
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -25,6 +27,8 @@ class Equilibrium:
         ________
             j1, j2: ndarray
                 Платёжные матрицы первого и второго участников
+            j_coop: ndarray
+                Матрица кооперативного дохода первого и второго участников
             _a1, _a2, _a: ndarray
                 Матрицы A-равновесий. Заполняются после вызова любого метода,
                 который должен эти равновесия посчитать для своей работы.
@@ -55,6 +59,8 @@ class Equilibrium:
         """
         self.j1 = j1
         self.j2 = j2
+
+        self.j_coop = j1 + j2
         # Объявляем свойства для хранения матриц равновесий
         self._a1 = None
         self._a2 = None
@@ -104,17 +110,29 @@ class Equilibrium:
         # Выделяем память под нулевую матрицу A1 и заполняем её неопределёнными знаениями np.NaN
         # self._a1 = np.zeros(self.j1.shape)
         self._a1 = np.full(self.j1.shape, np.nan)
-        # Поскольку первый участник выбирает столбец, то чтобы быть A1 равновесием
+        # Поскольку первый участник выбирает столбец, то для того, чтобы быть A1 равновесием
         # значение в платёжной матрице должно быть больше или равно значению sup по всем столбцам
         # от inf по каждому столбцу.
-        # Функция amin(, axis=0) возвращает вектор(массив) минимумов по каждому из столбцов.
-        si = max(np.amin(self.j1, 0))
+        # Функция nanmin(, axis=0) возвращает вектор(массив) минимумов по каждому из столбцов, игнорируя nan.
+        si = max(np.nanmin(self.j1, 0))
+        max_col_idx =  np.nanmin(self.j1, 0).argmax()
         for i in range(szy):
             for j in range(szx):
                 # Проверка на j1[i, j] > si для чисел с плавающей запятой с добавлением
                 # проверки на равенство с учётом точности вычислений.
-                if self.j1[i, j] > si or self._almost_equal(self.j1[i, j], si):
-                    self._a1[i, j] = 1
+                   if (not np.isnan(self.j1[i, j])):
+                       if (not np.isnan(self.j1[i, max_col_idx])):
+                           if (self.j1[i, j] > si or self._almost_equal(self.j1[i, j], si)):
+                               self._a1[i, j] = 1
+                       else:
+                           flag = True
+                           for g in range(szx):
+                               if (not np.isnan(self.j1[i, g])) and (self.j1[i, j] < np.nanmin(self.j1[:, g])):
+                                   flag = False
+                                   break
+                           if flag:
+                               self._a1[i, j] = 1
+
 
         # Выделяем память под нулевую матрицу A2
         # self._a2 = np.zeros(self.j2.shape)
@@ -123,12 +141,12 @@ class Equilibrium:
         # значение в платёжной матрице должно быть больше или равно значению sup по всем строкам
         # от inf по каждой строке.
         # Функция amin(, axis=1) возвращает вектор(массив) минимумов по каждой строке.
-        si = max(np.amin(self.j2, 1))
+        si = max(np.nanmin(self.j2, 1))
         for i in range(szy):
             for j in range(szx):
                 # Проверка на j1[i, j] > si для чисел с плавающей запятой с добавлением
                 # проверки на равенство с учётом точности вычислений.
-                if self.j2[i, j] > si or self._almost_equal(self.j2[i, j], si):
+                if (self.j2[i, j] != np.nan) and (self.j2[i, j] > si or self._almost_equal(self.j2[i, j], si)):
                     self._a2[i, j] = 1
 
         # Построение матрицы A-равновесий
@@ -160,7 +178,7 @@ class Equilibrium:
         self._b1 = np.full(self.j1.shape, np.nan)
         self._b2 = np.full(self.j2.shape, np.nan)
 
-        # Если матрицы A-равновесий пока не пострены - стоим их.
+        # Если матрицы A-равновесий пока не построены - стоим их.
         if (self._a1 is None) or (self._a2 is None) or (self._a is None):
             self.find_a_eq(False)
 
@@ -221,7 +239,7 @@ class Equilibrium:
         self._bs1 = np.full(self.j1.shape, np.nan)
         self._bs2 = np.full(self.j2.shape, np.nan)
 
-        # Если матрицы A-равновесий пока не пострены - стоим их.
+        # Если матрицы A-равновесий пока не построены - стоим их.
         if (self._a1 is None) or (self._a2 is None) or (self._a is None):
             self.find_a_eq(False)
 
@@ -963,7 +981,7 @@ class EquilibriumOnPlane(Equilibrium):
                                        arrowprops=dict(arrowstyle="->"))
             annot1.set_visible(False)
             fig.canvas.mpl_connect("motion_notify_event", hover1)
-        # ------------- Добавление точеки и всплывающих подсказок end---------
+        # ------------- Добавление точки и всплывающих подсказок end---------
         axs_m1.set_ylim([self.ymin - 0 * self.ystep, self.ymax + 3 * self.ystep])
         axs_m1.set_xlim([self.xmin - 0 * self.xstep, self.xmax + 3 * self.xstep])
         axs_m1.set_title(kwargs.get('title_11', ''))
